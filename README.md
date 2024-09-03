@@ -1,3 +1,3 @@
 # SoftwareENG-Project1
 
-Send github email account. Please :)
+Project to guide TAMIU Freshmen
