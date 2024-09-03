@@ -1,3 +1,3 @@
 # SoftwareENG-Project1
 
-Hi
+Send github email account. Please :)
