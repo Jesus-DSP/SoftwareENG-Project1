@@ -1,23 +1,236 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Interactive TAMIU Map</title>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
     <style>
-        #map { height: 100vh; }
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: Arial, sans-serif;
+        }
+
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+
+        #searchBar {
+            position: absolute;
+            top: 10px;
+            left: 50px;
+            z-index: 1000;
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #originSearch, #destinationSearch {
+            padding: 8px;
+            width: 100%;
+            box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        #suggestions {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            width: 100%;
+            background: white;
+            border: 1px solid #ccc;
+            box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        #suggestions li {
+            padding: 8px;
+            cursor: pointer;
+        }
+
+        #suggestions li:hover {
+            background-color: #f0f0f0;
+        }
+
+        #gpsButton, #findPathButton {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: blue;
+            color: white;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        #findPathButton {
+            background-color: green;
+        }
     </style>
 </head>
 <body>
+    <div id="searchBar">
+        <input type="text" id="originSearch" placeholder="Search origin" />
+        <input type="text" id="destinationSearch" placeholder="Search destination" />
+        <ul id="suggestions"></ul>
+        <button id="gpsButton">Use Current GPS Location as Origin</button>
+        <button id="findPathButton">Find Path</button>
+    </div>
     <div id="map"></div>
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
     <script>
-        var map = L.map('map').setView([27.571807, -99.435152], 17);
+        var map = L.map('map').fitWorld();
+
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '© OpenStreetMap'
+            attribution: '© OpenStreetMap contributors'
         }).addTo(map);
+
+        var currentLocationMarker = null;
+        var originMarker = null;
+        var destinationMarker = null;
+
+        var routingControl = null;
+
+        function setRoute() {
+            if (originMarker && destinationMarker) {
+                if (routingControl) {
+                    map.removeControl(routingControl);
+                }
+                routingControl = L.Routing.control({
+                    waypoints: [
+                        originMarker.getLatLng(),  // Origin location
+                        destinationMarker.getLatLng() // Destination location
+                    ],
+                    lineOptions: {
+                        styles: [{color: 'blue', weight: 5}]  // Blue line for route
+                    }
+                }).addTo(map);
+            } else {
+                alert('Please select both origin and destination.');
+            }
+        }
+
+        function onLocationFound(e) {
+            var radius = e.accuracy / 2;
+
+            if (currentLocationMarker) {
+                map.removeLayer(currentLocationMarker);
+            }
+
+            currentLocationMarker = L.marker(e.latlng, {icon: L.divIcon({className: 'current-location'})}).addTo(map)
+                .bindPopup("You are within " + radius + " meters from this point").openPopup();
+
+            L.circle(e.latlng, radius).addTo(map);
+            map.setView(e.latlng, 15);
+
+            if (!originMarker) {
+                originMarker = L.marker(e.latlng, {draggable: true}).addTo(map)
+                    .bindPopup("Origin").openPopup();
+            } else {
+                originMarker.setLatLng(e.latlng).update();
+            }
+        }
+
+        function onLocationError(e) {
+            alert(e.message);
+        }
+
+        map.locate({
+            setView: true, 
+            maxZoom: 16, 
+            enableHighAccuracy: true,  
+            timeout: 10000,            
+            maximumAge: 0              
+        });
+
+        map.on('locationfound', onLocationFound);
+        map.on('locationerror', onLocationError);
+
+        function onMapClick(e) {
+            if (!originMarker) {
+                originMarker = L.marker(e.latlng, {draggable: true}).addTo(map)
+                    .bindPopup("Origin").openPopup();
+            } else if (!destinationMarker) {
+                destinationMarker = L.marker(e.latlng, {draggable: true}).addTo(map)
+                    .bindPopup("Destination").openPopup();
+            }
+        }
+
+        map.on('dblclick', onMapClick);
+
+        document.getElementById('gpsButton').addEventListener('click', function() {
+            map.locate({
+                setView: true, 
+                maxZoom: 16, 
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
+        });
+
+        document.getElementById('findPathButton').addEventListener('click', function() {
+            setRoute(); // This function will calculate and display the route
+        });
+
+        function setupSearch(inputElement, setMarkerFunction) {
+            inputElement.addEventListener('input', function() {
+                var query = inputElement.value;
+                if (query.length < 3) {
+                    suggestionsList.innerHTML = ''; 
+                    return;
+                }
+
+                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}`)
+                    .then(response => response.json())
+                    .then(results => {
+                        suggestionsList.innerHTML = ''; 
+                        results.forEach(result => {
+                            var suggestionItem = document.createElement('li');
+                            suggestionItem.textContent = result.display_name;
+                            suggestionItem.addEventListener('click', function() {
+                                var latlng = L.latLng(result.lat, result.lon);
+                                setMarkerFunction(latlng);
+                                suggestionsList.innerHTML = ''; 
+                                inputElement.value = result.display_name;
+                            });
+                            suggestionsList.appendChild(suggestionItem);
+                        });
+                    });
+            });
+        }
+
+        function setOrigin(latlng) {
+            if (!originMarker) {
+                originMarker = L.marker(latlng, {draggable: true}).addTo(map)
+                    .bindPopup("Origin").openPopup();
+            } else {
+                originMarker.setLatLng(latlng).update();
+            }
+        }
+
+        function setDestination(latlng) {
+            if (!destinationMarker) {
+                destinationMarker = L.marker(latlng, {draggable: true}).addTo(map)
+                    .bindPopup("Destination").openPopup();
+            } else {
+                destinationMarker.setLatLng(latlng).update();
+            }
+        }
+
+        var originSearch = document.getElementById('originSearch');
+        var destinationSearch = document.getElementById('destinationSearch');
+        var suggestionsList = document.getElementById('suggestions');
+
+        setupSearch(originSearch, setOrigin);
+        setupSearch(destinationSearch, setDestination);
+
     </script>
 </body>
 </html>
